@@ -2134,8 +2134,9 @@ def listing_identifier(
 def build_comparable_map(
     comparable_rows: pd.DataFrame,
     predicted_revpar: float,
+    paddington_mode: bool = False,
 ) -> folium.Map:
-    """Create the Folium map and listing popups."""
+    """Create the Folium map and listing popups for the active edition."""
     center = [
         float(
             comparable_rows[
@@ -2179,11 +2180,9 @@ def build_comparable_map(
         )
     )
 
-    # Paddington Edition landmark: a large, fixed-pixel Paddington image
-    # positioned over London Paddington Station. Because this is a Leaflet
-    # marker rather than a geographic image overlay, it remains easy to spot
-    # even when the map is zoomed far out.
-    if PADDINGTON_UK_PATH.exists():
+    # Paddington Edition landmark: a fixed-pixel Paddington image over
+    # London Paddington Station. It stays visually prominent when zoomed out.
+    if paddington_mode and PADDINGTON_UK_PATH.exists():
         folium.Marker(
             location=[51.5154, -0.1755],
             icon=folium.CustomIcon(
@@ -2408,52 +2407,77 @@ def build_comparable_map(
             '</div>'
         )
 
-        if PADDINGTON_MARKER_PATH.exists():
+        marker_html = (
+            '<div style="'
+            'width:28px;'
+            'height:28px;'
+            f'background:{marker_color};'
+            'border:2px solid rgba(255,255,255,.95);'
+            'border-radius:50% 50% 50% 0;'
+            'transform:rotate(-45deg);'
+            'box-shadow:0 2px 7px rgba(0,0,0,.28);'
+            'position:relative;'
+            '">'
+            '<div style="'
+            'width:8px;'
+            'height:8px;'
+            'background:#ffffff;'
+            'border-radius:50%;'
+            'position:absolute;'
+            'left:8px;'
+            'top:8px;'
+            '"></div>'
+            '</div>'
+        )
+
+        if paddington_mode and PADDINGTON_MARKER_PATH.exists():
             listing_icon = folium.CustomIcon(
                 icon_image=str(PADDINGTON_MARKER_PATH),
-                # The supplied PNG includes transparent padding. These dimensions
-                # yield a visible Paddington marker roughly comparable to the old pin.
+                # The PNG includes transparent padding. These dimensions keep
+                # the visible bear close to the standard pin's visual scale.
                 icon_size=(120, 62),
                 icon_anchor=(59, 60),
                 popup_anchor=(0, -55),
             )
+            tooltip_offset = (0, -38)
         else:
-            # Preserve a readable fallback if the edition asset is missing.
             listing_icon = folium.DivIcon(
-                html=(
-                    '<div style="'
-                    'width:28px;height:28px;'
-                    'background:#2f9e62;'
-                    'border:2px solid rgba(255,255,255,.95);'
-                    'border-radius:50% 50% 50% 0;'
-                    'transform:rotate(-45deg);'
-                    'box-shadow:0 2px 7px rgba(0,0,0,.28);'
-                    '"></div>'
-                ),
+                html=marker_html,
                 icon_size=(28, 28),
                 icon_anchor=(14, 28),
                 popup_anchor=(0, -28),
                 class_name="revpulse-map-pin",
             )
+            tooltip_offset = (0, -22)
 
         folium.Marker(
             location=[
-                float(listing["latitude"]),
-                float(listing["longitude"]),
+                float(
+                    listing[
+                        "latitude"
+                    ]
+                ),
+                float(
+                    listing[
+                        "longitude"
+                    ]
+                ),
             ],
             icon=listing_icon,
             tooltip=folium.Tooltip(
                 tooltip_html,
                 sticky=True,
                 direction="top",
-                offset=(0, -38),
+                offset=tooltip_offset,
             ),
             popup=folium.Popup(
                 popup_html,
                 max_width=290,
             ),
-            rise_on_hover=True,
-        ).add_to(comparable_map)
+            rise_on_hover=paddington_mode,
+        ).add_to(
+            comparable_map
+        )
 
     unique_locations = (
         comparable_rows[
@@ -3497,6 +3521,16 @@ def aggregate_display_contributions(
 
 bundle = load_bundle(BUNDLE_PATH)
 
+# The special edition control lives inside the collapsed About section, but
+# its session-state value must be read before the header and map are rendered.
+if "revpulse_edition_mode" not in st.session_state:
+    st.session_state["revpulse_edition_mode"] = "Standard"
+
+paddington_mode = (
+    st.session_state.get("revpulse_edition_mode", "Standard")
+    == "Paddington"
+)
+
 stored_version = str(bundle.get("sklearn_version", "unknown"))
 if stored_version != "unknown" and stored_version != sklearn.__version__:
     st.warning(
@@ -3546,6 +3580,12 @@ validation_exports_ready = all(
     ]
 )
 
+edition_parent_suffix = (
+    ' <span>(Paddington Edition)</span>'
+    if paddington_mode
+    else ''
+)
+
 logo_data_uri = ""
 if LOGO_PATH.exists():
     logo_data_uri = (
@@ -3567,20 +3607,20 @@ if logo_data_uri:
             <div class="brand-tagline">
                 Your pulse on the short-term rental market.
             </div>
-            <div class="brand-parent">Powered by AirROI <span>(Paddington Edition)</span></div>
+            <div class="brand-parent">Powered by AirROI{edition_parent_suffix}</div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 else:
     st.markdown(
-        """
+        f"""
         <div class="brand-header">
             <div style="font-size:2rem;font-weight:800;">RevPulse</div>
             <div class="brand-tagline">
                 Your pulse on the short-term rental market.
             </div>
-            <div class="brand-parent">Powered by AirROI <span>(Paddington Edition)</span></div>
+            <div class="brand-parent">Powered by AirROI{edition_parent_suffix}</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -4691,6 +4731,7 @@ else:
         comparable_map = build_comparable_map(
             comparable_rows,
             revpar,
+            paddington_mode=paddington_mode,
         )
 
         st_folium(
@@ -4701,7 +4742,8 @@ else:
             key=(
                 "comparable_map_"
                 f"{selected_city}_"
-                f"{selected_property}"
+                f"{selected_property}_"
+                f"{st.session_state.get('revpulse_edition_mode', 'Standard')}"
             ),
         )
 
@@ -4778,6 +4820,30 @@ with st.expander(
     "About This Model",
     expanded=False,
 ):
+    edition_toggle_help = (
+        "Switch between the standard RevPulse experience and the hidden "
+        "Paddington Edition. The model and calculations remain unchanged."
+    )
+
+    edition_left, edition_center, edition_right = st.columns([1, 0.5, 1])
+    with edition_center:
+        if hasattr(st, "segmented_control"):
+            st.segmented_control(
+                "Edition",
+                options=["Standard", "Paddington"],
+                selection_mode="single",
+                key="revpulse_edition_mode",
+                help=edition_toggle_help,
+            )
+        else:
+            st.radio(
+                "Edition",
+                options=["Standard", "Paddington"],
+                horizontal=True,
+                key="revpulse_edition_mode",
+                help=edition_toggle_help,
+            )
+
     st.markdown(
         """
 ### What is adjusted TTM RevPAR?
