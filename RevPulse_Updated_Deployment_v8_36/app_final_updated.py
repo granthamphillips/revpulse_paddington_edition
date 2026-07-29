@@ -10,6 +10,7 @@ Required files in the same directory:
     revpulse_feature_category_map.csv
     paddingtonmapmarker.png
     paddingtonUK.png
+    arbys_logo.webp
 
 The bundle must contain the fitted model, imputer, scaler, training feature
 schema, category metadata, and amenity group definitions. Use the companion
@@ -45,6 +46,7 @@ MARKET_SCORE_REFERENCE_PATH = APP_DIR / "revpulse_market_score_reference.csv"
 FEATURE_CATEGORY_MAP_PATH = APP_DIR / "revpulse_feature_category_map.csv"
 PADDINGTON_MARKER_PATH = APP_DIR / "paddingtonmapmarker.png"
 PADDINGTON_UK_PATH = APP_DIR / "paddingtonUK.png"
+ARBYS_MARKER_PATH = APP_DIR / "arbys_logo.webp"
 
 COLOR_POSITIVE = "#2f9e62"
 COLOR_NEGATIVE = "#b83232"
@@ -2134,9 +2136,11 @@ def listing_identifier(
 def build_comparable_map(
     comparable_rows: pd.DataFrame,
     predicted_revpar: float,
-    paddington_mode: bool = False,
+    edition_mode: str = "Standard",
 ) -> folium.Map:
     """Create the Folium map and listing popups for the active edition."""
+    paddington_mode = edition_mode == "Paddington"
+    arbys_mode = edition_mode == "Arby's"
     center = [
         float(
             comparable_rows[
@@ -2430,7 +2434,15 @@ def build_comparable_map(
             '</div>'
         )
 
-        if paddington_mode and PADDINGTON_MARKER_PATH.exists():
+        if arbys_mode and ARBYS_MARKER_PATH.exists():
+            listing_icon = folium.CustomIcon(
+                icon_image=str(ARBYS_MARKER_PATH),
+                icon_size=(82, 70),
+                icon_anchor=(41, 66),
+                popup_anchor=(0, -61),
+            )
+            tooltip_offset = (0, -50)
+        elif paddington_mode and PADDINGTON_MARKER_PATH.exists():
             listing_icon = folium.CustomIcon(
                 icon_image=str(PADDINGTON_MARKER_PATH),
                 # The PNG includes transparent padding. These dimensions keep
@@ -2474,7 +2486,7 @@ def build_comparable_map(
                 popup_html,
                 max_width=290,
             ),
-            rise_on_hover=paddington_mode,
+            rise_on_hover=(paddington_mode or arbys_mode),
         ).add_to(
             comparable_map
         )
@@ -3526,10 +3538,12 @@ bundle = load_bundle(BUNDLE_PATH)
 if "revpulse_edition_mode" not in st.session_state:
     st.session_state["revpulse_edition_mode"] = "Standard"
 
-paddington_mode = (
-    st.session_state.get("revpulse_edition_mode", "Standard")
-    == "Paddington"
+active_edition = st.session_state.get(
+    "revpulse_edition_mode",
+    "Standard",
 )
+paddington_mode = active_edition == "Paddington"
+arbys_mode = active_edition == "Arby's"
 
 stored_version = str(bundle.get("sklearn_version", "unknown"))
 if stored_version != "unknown" and stored_version != sklearn.__version__:
@@ -3581,8 +3595,8 @@ validation_exports_ready = all(
 )
 
 edition_parent_suffix = (
-    ' <span>(Paddington Edition)</span>'
-    if paddington_mode
+    f' <span>({escape(active_edition)} Edition)</span>'
+    if active_edition != "Standard"
     else ''
 )
 
@@ -4731,7 +4745,7 @@ else:
         comparable_map = build_comparable_map(
             comparable_rows,
             revpar,
-            paddington_mode=paddington_mode,
+            edition_mode=active_edition,
         )
 
         st_folium(
@@ -4820,32 +4834,13 @@ with st.expander(
     "About This Model",
     expanded=False,
 ):
-    edition_toggle_help = (
-        "Switch between the standard RevPulse experience and the hidden "
-        "Paddington Edition. The model and calculations remain unchanged."
+    model_details_tab, easter_eggs_tab = st.tabs(
+        ["Model details", "Easter eggs"]
     )
 
-    edition_left, edition_center, edition_right = st.columns([1, 0.5, 1])
-    with edition_center:
-        if hasattr(st, "segmented_control"):
-            st.segmented_control(
-                "Edition",
-                options=["Standard", "Paddington"],
-                selection_mode="single",
-                key="revpulse_edition_mode",
-                help=edition_toggle_help,
-            )
-        else:
-            st.radio(
-                "Edition",
-                options=["Standard", "Paddington"],
-                horizontal=True,
-                key="revpulse_edition_mode",
-                help=edition_toggle_help,
-            )
-
-    st.markdown(
-        """
+    with model_details_tab:
+        st.markdown(
+            """
 ### What is adjusted TTM RevPAR?
 
 TTM means **trailing 12 months**, while RevPAR means **revenue per available room**. RevPAR combines average rate and occupancy into one measure of revenue performance. The model predicts adjusted TTM RevPAR on a daily basis using the measure provided in the source data.
@@ -4903,8 +4898,53 @@ The application allows users to:
 Predictions are estimates based on patterns found in historical short-term-rental data. The factors and potential improvements shown represent model associations, not guaranteed or causal effects. Actual performance may also depend on seasonality, local events, pricing strategy, competition, operating quality, and market conditions not fully captured by the model.
 
 This tool evaluates **revenue performance**, not complete investment returns. It does not account for acquisition price, financing, taxes, maintenance, management fees, or other operating expenses.
-        """
-    )
+            """
+        )
+
+    with easter_eggs_tab:
+        st.markdown(
+            """
+<div style="height:1.1rem;"></div>
+<div style="text-align:center;font-size:.78rem;opacity:.62;letter-spacing:.7px;text-transform:uppercase;font-weight:700;">
+Secret editions
+</div>
+<div style="text-align:center;font-size:.82rem;opacity:.68;margin:.35rem auto 1rem auto;max-width:560px;">
+These change only the presentation of RevPulse. The fitted model, data, scoring, and calculations stay exactly the same.
+</div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        edition_left, edition_center, edition_right = st.columns(
+            [0.7, 1.6, 0.7]
+        )
+        with edition_center:
+            edition_toggle_help = (
+                "Choose the standard interface or reveal one of the hidden "
+                "special editions. This affects appearance only."
+            )
+
+            if hasattr(st, "segmented_control"):
+                st.segmented_control(
+                    "Edition",
+                    options=["Standard", "Paddington", "Arby's"],
+                    selection_mode="single",
+                    key="revpulse_edition_mode",
+                    help=edition_toggle_help,
+                )
+            else:
+                st.radio(
+                    "Edition",
+                    options=["Standard", "Paddington", "Arby's"],
+                    horizontal=True,
+                    key="revpulse_edition_mode",
+                    help=edition_toggle_help,
+                )
+
+        st.markdown(
+            '<div style="height:2.2rem;"></div>',
+            unsafe_allow_html=True,
+        )
 
 with st.expander(
     "View model inputs"
