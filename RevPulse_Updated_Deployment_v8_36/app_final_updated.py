@@ -10,12 +10,16 @@ Required files in the same directory:
     revpulse_feature_category_map.csv
     paddingtonmapmarker.png
     paddingtonUK.png
-    arbys_logo.webp
+    arbys_logo.png
+    team_markers/gfp.png
+    team_markers/member_01.png through member_05.png
 
 The bundle must contain the fitted model, imputer, scaler, training feature
 schema, category metadata, and amenity group definitions. Use the companion
 export cell generated for the modeling notebook.
 """
+
+# Verified secret-editions build: v4
 
 from __future__ import annotations
 
@@ -46,7 +50,17 @@ MARKET_SCORE_REFERENCE_PATH = APP_DIR / "revpulse_market_score_reference.csv"
 FEATURE_CATEGORY_MAP_PATH = APP_DIR / "revpulse_feature_category_map.csv"
 PADDINGTON_MARKER_PATH = APP_DIR / "paddingtonmapmarker.png"
 PADDINGTON_UK_PATH = APP_DIR / "paddingtonUK.png"
-ARBYS_MARKER_PATH = APP_DIR / "arbys_logo.webp"
+ARBYS_MARKER_PATH = APP_DIR / "arbys_logo.png"
+TEAM_MARKER_DIR = APP_DIR / "team_markers"
+TEAM_MARKER_PATHS = [
+    TEAM_MARKER_DIR / "gfp.png",
+    TEAM_MARKER_DIR / "member_01.png",
+    TEAM_MARKER_DIR / "member_02.png",
+    TEAM_MARKER_DIR / "member_03.png",
+    TEAM_MARKER_DIR / "member_04.png",
+    TEAM_MARKER_DIR / "member_05.png",
+]
+EDITION_OPTIONS = ["Standard", "Paddington", "Arby's", "Team RevPulse"]
 
 COLOR_POSITIVE = "#2f9e62"
 COLOR_NEGATIVE = "#b83232"
@@ -874,6 +888,40 @@ st.markdown(
             }
         }
 
+
+
+
+        /* The only nested expander is the hidden Easter-eggs control at the
+           bottom of About This Model. Keep it deliberately understated. */
+        div[data-testid="stExpander"] div[data-testid="stExpander"] details {
+            border: 0 !important;
+            border-radius: 6px !important;
+            background: transparent !important;
+            box-shadow: none !important;
+        }
+
+        div[data-testid="stExpander"] div[data-testid="stExpander"] summary {
+            min-height: 0 !important;
+            padding: .08rem .18rem !important;
+            opacity: .30;
+            font-size: .68rem !important;
+            font-weight: 520 !important;
+        }
+
+        div[data-testid="stExpander"] div[data-testid="stExpander"] summary:hover,
+        div[data-testid="stExpander"] div[data-testid="stExpander"] summary:focus-visible {
+            opacity: .68;
+            background: rgba(127, 127, 127, .045) !important;
+        }
+
+        div[data-testid="stExpander"] div[data-testid="stExpander"] summary p {
+            font-size: .68rem !important;
+            letter-spacing: .05px;
+        }
+
+        div[data-testid="stExpander"] div[data-testid="stExpander"] details > div {
+            padding-top: .18rem !important;
+        }
 
         /* Final amenity-checkbox override: force the selected icon to RevPulse green. */
         div[data-testid="stCheckbox"] {
@@ -2141,6 +2189,8 @@ def build_comparable_map(
     """Create the Folium map and listing popups for the active edition."""
     paddington_mode = edition_mode == "Paddington"
     arbys_mode = edition_mode == "Arby's"
+    team_mode = edition_mode == "Team RevPulse"
+    team_marker_paths = [path for path in TEAM_MARKER_PATHS if path.exists()]
     center = [
         float(
             comparable_rows[
@@ -2209,7 +2259,38 @@ def build_comparable_map(
             rise_on_hover=True,
         ).add_to(comparable_map)
 
-    for _, listing in comparable_rows.iterrows():
+    # Arby's Edition world-map easter egg. It appears over Europe when the
+    # user zooms out, without changing the local comparable-map bounds.
+    if arbys_mode:
+        folium.Marker(
+            location=[50.6, 9.4],
+            icon=folium.DivIcon(
+                html=(
+                    '<div style="'
+                    'width:420px;'
+                    'text-align:center;'
+                    'white-space:nowrap;'
+                    'font-family:Arial,Helvetica,sans-serif;'
+                    'font-size:30px;'
+                    'font-weight:950;'
+                    'letter-spacing:1.2px;'
+                    'color:#d71920;'
+                    'text-shadow:'
+                    '0 2px 0 rgba(255,255,255,.98),'
+                    '0 0 5px rgba(255,255,255,.98),'
+                    '0 3px 10px rgba(0,0,0,.28);'
+                    'pointer-events:none;'
+                    '">WE HAVE THE MEATS</div>'
+                ),
+                icon_size=(420, 48),
+                icon_anchor=(210, 24),
+                class_name="arbys-europe-label",
+            ),
+            interactive=False,
+            z_index_offset=850,
+        ).add_to(comparable_map)
+
+    for marker_index, (_, listing) in enumerate(comparable_rows.iterrows()):
 
         actual_revpar = float(
             listing[
@@ -2434,14 +2515,27 @@ def build_comparable_map(
             '</div>'
         )
 
-        if arbys_mode and ARBYS_MARKER_PATH.exists():
+        if team_mode and team_marker_paths:
+            # The list begins with GFP, so after all six unique portraits have
+            # appeared once, GFP is the first portrait reused.
+            team_marker_path = team_marker_paths[
+                marker_index % len(team_marker_paths)
+            ]
+            listing_icon = folium.CustomIcon(
+                icon_image=str(team_marker_path),
+                icon_size=(54, 54),
+                icon_anchor=(27, 27),
+                popup_anchor=(0, -28),
+            )
+            tooltip_offset = (0, -30)
+        elif arbys_mode and ARBYS_MARKER_PATH.exists():
             listing_icon = folium.CustomIcon(
                 icon_image=str(ARBYS_MARKER_PATH),
-                icon_size=(82, 70),
-                icon_anchor=(41, 66),
-                popup_anchor=(0, -61),
+                icon_size=(36, 31),
+                icon_anchor=(18, 30),
+                popup_anchor=(0, -28),
             )
-            tooltip_offset = (0, -50)
+            tooltip_offset = (0, -24)
         elif paddington_mode and PADDINGTON_MARKER_PATH.exists():
             listing_icon = folium.CustomIcon(
                 icon_image=str(PADDINGTON_MARKER_PATH),
@@ -2486,7 +2580,7 @@ def build_comparable_map(
                 popup_html,
                 max_width=290,
             ),
-            rise_on_hover=(paddington_mode or arbys_mode),
+            rise_on_hover=(paddington_mode or arbys_mode or team_mode),
         ).add_to(
             comparable_map
         )
@@ -3531,19 +3625,33 @@ def aggregate_display_contributions(
     return display_df
 
 
+def apply_edition_selection() -> None:
+    """Copy the hidden selector value into the active edition before rerendering."""
+    selected = st.session_state.get(
+        "revpulse_edition_selector",
+        "Standard",
+    )
+    if selected not in EDITION_OPTIONS:
+        selected = "Standard"
+    st.session_state["revpulse_edition_mode"] = selected
+
+
 bundle = load_bundle(BUNDLE_PATH)
 
-# The special edition control lives inside the collapsed About section, but
-# its session-state value must be read before the header and map are rendered.
-if "revpulse_edition_mode" not in st.session_state:
+# The selector is rendered at the bottom of About This Model. Separate widget
+# and active-state keys make its effect deterministic on the very next rerun.
+if st.session_state.get("revpulse_edition_mode") not in EDITION_OPTIONS:
     st.session_state["revpulse_edition_mode"] = "Standard"
 
-active_edition = st.session_state.get(
-    "revpulse_edition_mode",
-    "Standard",
-)
+if st.session_state.get("revpulse_edition_selector") not in EDITION_OPTIONS:
+    st.session_state["revpulse_edition_selector"] = st.session_state[
+        "revpulse_edition_mode"
+    ]
+
+active_edition = st.session_state["revpulse_edition_mode"]
 paddington_mode = active_edition == "Paddington"
 arbys_mode = active_edition == "Arby's"
+team_mode = active_edition == "Team RevPulse"
 
 stored_version = str(bundle.get("sklearn_version", "unknown"))
 if stored_version != "unknown" and stored_version != sklearn.__version__:
@@ -4757,7 +4865,7 @@ else:
                 "comparable_map_"
                 f"{selected_city}_"
                 f"{selected_property}_"
-                f"{st.session_state.get('revpulse_edition_mode', 'Standard')}"
+                f"{active_edition}"
             ),
         )
 
@@ -4834,13 +4942,8 @@ with st.expander(
     "About This Model",
     expanded=False,
 ):
-    model_details_tab, easter_eggs_tab = st.tabs(
-        ["Model details", "Easter eggs"]
-    )
-
-    with model_details_tab:
-        st.markdown(
-            """
+    st.markdown(
+        """
 ### What is adjusted TTM RevPAR?
 
 TTM means **trailing 12 months**, while RevPAR means **revenue per available room**. RevPAR combines average rate and occupancy into one measure of revenue performance. The model predicts adjusted TTM RevPAR on a daily basis using the measure provided in the source data.
@@ -4898,53 +5001,47 @@ The application allows users to:
 Predictions are estimates based on patterns found in historical short-term-rental data. The factors and potential improvements shown represent model associations, not guaranteed or causal effects. Actual performance may also depend on seasonality, local events, pricing strategy, competition, operating quality, and market conditions not fully captured by the model.
 
 This tool evaluates **revenue performance**, not complete investment returns. It does not account for acquisition price, financing, taxes, maintenance, management fees, or other operating expenses.
-            """
+        """
+    )
+
+    st.markdown(
+        '<div style="height:.55rem;"></div>',
+        unsafe_allow_html=True,
+    )
+
+    # Deliberately subtle nested dropdown at the literal bottom of About.
+    with st.expander(
+        "easter eggs",
+        expanded=False,
+    ):
+        st.caption(
+            "Presentation-only editions. The fitted model, data, scoring, "
+            "and calculations remain unchanged."
         )
 
-    with easter_eggs_tab:
-        st.markdown(
-            """
-<div style="height:1.1rem;"></div>
-<div style="text-align:center;font-size:.78rem;opacity:.62;letter-spacing:.7px;text-transform:uppercase;font-weight:700;">
-Secret editions
-</div>
-<div style="text-align:center;font-size:.82rem;opacity:.68;margin:.35rem auto 1rem auto;max-width:560px;">
-These change only the presentation of RevPulse. The fitted model, data, scoring, and calculations stay exactly the same.
-</div>
-            """,
-            unsafe_allow_html=True,
+        edition_toggle_help = (
+            "Choose the standard interface or reveal a hidden special "
+            "edition. This affects appearance only."
         )
 
-        edition_left, edition_center, edition_right = st.columns(
-            [0.7, 1.6, 0.7]
-        )
-        with edition_center:
-            edition_toggle_help = (
-                "Choose the standard interface or reveal one of the hidden "
-                "special editions. This affects appearance only."
+        if hasattr(st, "segmented_control"):
+            st.segmented_control(
+                "Edition",
+                options=EDITION_OPTIONS,
+                selection_mode="single",
+                key="revpulse_edition_selector",
+                on_change=apply_edition_selection,
+                help=edition_toggle_help,
             )
-
-            if hasattr(st, "segmented_control"):
-                st.segmented_control(
-                    "Edition",
-                    options=["Standard", "Paddington", "Arby's"],
-                    selection_mode="single",
-                    key="revpulse_edition_mode",
-                    help=edition_toggle_help,
-                )
-            else:
-                st.radio(
-                    "Edition",
-                    options=["Standard", "Paddington", "Arby's"],
-                    horizontal=True,
-                    key="revpulse_edition_mode",
-                    help=edition_toggle_help,
-                )
-
-        st.markdown(
-            '<div style="height:2.2rem;"></div>',
-            unsafe_allow_html=True,
-        )
+        else:
+            st.radio(
+                "Edition",
+                options=EDITION_OPTIONS,
+                horizontal=False,
+                key="revpulse_edition_selector",
+                on_change=apply_edition_selection,
+                help=edition_toggle_help,
+            )
 
 with st.expander(
     "View model inputs"
