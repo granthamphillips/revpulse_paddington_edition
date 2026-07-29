@@ -2290,6 +2290,31 @@ def build_comparable_map(
             z_index_offset=850,
         ).add_to(comparable_map)
 
+    # Team RevPulse Edition world-map easter egg. Show the RevPulse logo over
+    # Europe while keeping the local comparable-map view unchanged.
+    if team_mode and LOGO_PATH.exists():
+        folium.Marker(
+            location=[50.9, 10.3],
+            icon=folium.CustomIcon(
+                icon_image=str(LOGO_PATH),
+                icon_size=(300, 108),
+                icon_anchor=(150, 54),
+                popup_anchor=(0, -50),
+            ),
+            tooltip=folium.Tooltip(
+                "Team RevPulse",
+                sticky=True,
+                direction="top",
+                offset=(0, -48),
+            ),
+            popup=folium.Popup(
+                "<b>Team RevPulse</b><br>Secret team edition",
+                max_width=220,
+            ),
+            z_index_offset=825,
+            rise_on_hover=True,
+        ).add_to(comparable_map)
+
     for marker_index, (_, listing) in enumerate(comparable_rows.iterrows()):
 
         actual_revpar = float(
